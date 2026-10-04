@@ -1,0 +1,88 @@
+! =============================================================
+! SW-ACADEMIC  -  Access Switch: Faculty (VLAN 30) + Library (VLAN 50)
+! Platform: Cisco Catalyst 2960-24TT
+! =============================================================
+
+hostname SW-ACADEMIC
+!
+no ip domain-lookup
+ip domain-name college.local
+enable secret Cl@ssC0llege!Academic
+service password-encryption
+!
+banner motd #
+***************************************************************
+ AUTHORIZED ACCESS ONLY - College Access Switch (SW-ACADEMIC)
+***************************************************************
+#
+!
+username netadmin privilege 15 secret N3tAdm1n@Academic
+crypto key generate rsa modulus 2048
+ip ssh version 2
+!
+line con 0
+ password C0ns0le@Academic
+ login
+line vty 0 4
+ login local
+ transport input ssh
+!
+logging buffered 16384 informational
+!
+vlan 30
+ name FACULTY
+vlan 50
+ name LIBRARY
+vlan 99
+ name NET_MGMT
+vlan 999
+ name UNUSED_PARKING
+!
+spanning-tree mode pvst
+!
+interface Vlan99
+ description Switch management interface
+ ip address 10.10.99.13 255.255.255.0
+ no shutdown
+ip default-gateway 10.10.99.1
+!
+interface GigabitEthernet0/1
+ description TRUNK-TO-SW-CORE
+ switchport trunk encapsulation dot1q
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 30,50,99
+ switchport mode trunk
+ switchport nonegotiate
+ no shutdown
+!
+interface range FastEthernet0/1-2
+ description ACCESS-PORT :: PC-FACULTY1 / PC-FACULTY2
+ switchport mode access
+ switchport access vlan 30
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation restrict
+ switchport port-security mac-address sticky
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+!
+interface FastEthernet0/3
+ description ACCESS-PORT :: PC-LIBRARY1
+ switchport mode access
+ switchport access vlan 50
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation restrict
+ switchport port-security mac-address sticky
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+!
+interface range FastEthernet0/4-24
+ description UNUSED - administratively shut down
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+!
+end

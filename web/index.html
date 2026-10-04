@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>College Management Portal</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; margin: 0; background: #f2f4f7; color: #1a1a1a; }
+  header { background: #0b3d91; color: #ffffff; padding: 24px; text-align: center; }
+  header h1 { margin: 0 0 6px 0; font-size: 28px; }
+  header p { margin: 0; font-size: 14px; color: #cdd9f5; }
+  nav { background: #092c6b; padding: 10px; text-align: center; }
+  nav a { color: #ffffff; text-decoration: none; margin: 0 14px; font-size: 14px; font-weight: bold; }
+  nav a:hover { text-decoration: underline; }
+  .container { max-width: 960px; margin: 30px auto; padding: 0 20px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 16px; }
+  .card { background: #ffffff; border: 1px solid #dde3ec; border-radius: 6px; padding: 18px; flex: 1 1 260px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .card h2 { font-size: 17px; margin-top: 0; color: #0b3d91; }
+  .card p { font-size: 13px; color: #444; line-height: 1.5; }
+  footer { text-align: center; padding: 20px; font-size: 12px; color: #777; }
+  .badge { display:inline-block; background:#0b3d91; color:#fff; font-size:11px; padding:2px 8px; border-radius:10px; margin-bottom:8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>City College of Engineering &amp; Management</h1>
+  <p>College Management Portal &mdash; college.local</p>
+</header>
+
+<nav>
+  <a href="#student">Student Portal</a>
+  <a href="#faculty">Faculty Portal</a>
+  <a href="#library">Library</a>
+  <a href="#accounts">Accounts</a>
+  <a href="#itsupport">IT Support</a>
+  <a href="#contact">Contact</a>
+</nav>
+
+<div class="container">
+
+  <div class="grid">
+
+    <div class="card" id="student">
+      <span class="badge">VLAN 20 / 25</span>
+      <h2>Student Portal</h2>
+      <p>Access timetables, attendance, exam results, fee status, and
+      course material. Available on-campus (wired labs) and over the
+      <strong>COLLEGE-WIFI</strong> wireless network.</p>
+    </div>
+
+    <div class="card" id="faculty">
+      <span class="badge">VLAN 30</span>
+      <h2>Faculty Portal</h2>
+      <p>Manage class rosters, upload grades, submit attendance, and
+      access internal faculty circulars and the staff directory.</p>
+    </div>
+
+    <div class="card" id="library">
+      <span class="badge">VLAN 50</span>
+      <h2>Library</h2>
+      <p>Search the library catalogue, check book availability, renew
+      loans, and reserve study rooms.</p>
+    </div>
+
+    <div class="card" id="accounts">
+      <span class="badge">VLAN 60 &mdash; Restricted</span>
+      <h2>Accounts &amp; Finance</h2>
+      <p>Fee processing, payroll, and financial reporting. Access is
+      restricted to the Accounts and Management network segments only.</p>
+    </div>
+
+    <div class="card" id="itsupport">
+      <span class="badge">VLAN 40</span>
+      <h2>IT Support</h2>
+      <p>Raise a helpdesk ticket for network, hardware, or account
+      access issues. IT manages the server room, campus Wi-Fi, and
+      all network infrastructure.</p>
+    </div>
+
+    <div class="card" id="contact">
+      <span class="badge">Front Office</span>
+      <h2>Contact</h2>
+      <p>Administration Block, Main Campus<br>
+      Email: info@college.local<br>
+      Phone: +44 0000 000000</p>
+    </div>
+
+  </div>
+
+</div>
+
+<footer>
+  &copy; 2026 City College of Engineering &amp; Management &mdash; Internal network portal (college.local).<br>
+  Hosted on SRV-COLLEGE (10.10.80.10) &mdash; Server VLAN 80.
+</footer>
+
+</body>
+</html>

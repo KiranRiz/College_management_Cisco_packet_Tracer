@@ -1,0 +1,35 @@
+! =============================================================
+! ISP-RTR  -  Simulated Internet / WAN Core
+! Role: Pure IP forwarding between R-EDGE, R-REMOTE, and EXT-SRV.
+!       Represents "the Internet" for this project - intentionally
+!       has NO college-specific configuration, NAT, or security
+!       policy, exactly as a real ISP router would appear from the
+!       college's point of view.
+! Platform: Generic router in Packet Tracer
+! =============================================================
+
+hostname ISP-RTR
+!
+enable secret ISP-L4b-0nly
+service password-encryption
+!
+interface GigabitEthernet0/0
+ description LINK-TO-R-EDGE (college campus)
+ ip address 198.51.100.1 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description LINK-TO-R-REMOTE (college remote office)
+ ip address 198.51.100.5 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet0/2
+ description LINK-TO-EXT-SRV (simulated internet host)
+ ip address 198.51.100.9 255.255.255.248
+ no shutdown
+!
+! No static/dynamic routes required - all three networks above
+! are directly connected, so ISP-RTR already knows how to reach
+! every subnet it needs to for this lab.
+!
+end

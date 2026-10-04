@@ -1,0 +1,64 @@
+! =============================================================
+! SW-REMOTE  -  Access Switch at the Remote Admin Office
+! Platform: Cisco Catalyst 2960-24TT
+! =============================================================
+
+hostname SW-REMOTE
+!
+no ip domain-lookup
+ip domain-name college.local
+enable secret Cl@ssC0llege!Remote2
+service password-encryption
+!
+banner motd #
+***************************************************************
+ AUTHORIZED ACCESS ONLY - College Remote Office Switch
+***************************************************************
+#
+!
+username netadmin privilege 15 secret N3tAdm1n@SwRemote
+crypto key generate rsa modulus 2048
+ip ssh version 2
+!
+line con 0
+ password C0ns0le@SwRemote
+ login
+line vty 0 4
+ login local
+ transport input ssh
+!
+logging buffered 16384 informational
+!
+vlan 1
+ name REMOTE-OFFICE-LAN
+!
+spanning-tree mode pvst
+!
+interface Vlan1
+ description Switch management / remote office LAN
+ ip address 10.20.10.9 255.255.255.0
+ no shutdown
+ip default-gateway 10.20.10.1
+!
+interface GigabitEthernet0/1
+ description LINK-TO-R-REMOTE
+ switchport mode access
+ no shutdown
+!
+interface range FastEthernet0/1-2
+ description ACCESS-PORT :: PC-REMOTE1 / PC-REMOTE2
+ switchport mode access
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation restrict
+ switchport port-security mac-address sticky
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+!
+interface range FastEthernet0/3-24
+ description UNUSED - administratively shut down
+ switchport mode access
+ shutdown
+!
+end

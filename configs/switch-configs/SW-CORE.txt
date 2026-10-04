@@ -1,0 +1,271 @@
+! =============================================================
+! SW-CORE  -  Layer-3 Core/Distribution Switch
+! Role: Inter-VLAN routing (SVIs), DHCP server for all department
+!       VLANs, central enforcement point for the Student/Wireless
+!       restriction ACL, spanning-tree root for every VLAN
+! Platform: Cisco Catalyst 3560-24PS (multilayer switch)
+! =============================================================
+
+hostname SW-CORE
+!
+ip routing
+!
+no ip domain-lookup
+ip domain-name college.local
+enable secret Cl@ssC0llege!Core
+service password-encryption
+!
+banner motd #
+***************************************************************
+ AUTHORIZED ACCESS ONLY - College Core Switch (SW-CORE)
+***************************************************************
+#
+!
+username netadmin privilege 15 secret N3tAdm1n@Core
+crypto key generate rsa modulus 2048
+ip ssh version 2
+!
+line con 0
+ password C0ns0le@Core
+ login
+line vty 0 4
+ login local
+ transport input ssh
+!
+logging buffered 16384 informational
+snmp-server community COLLEGE-RO RO
+!
+! -------------------------------------------------------------
+! VLAN Database
+! -------------------------------------------------------------
+vlan 10
+ name ADMIN
+vlan 20
+ name STUDENTS
+vlan 25
+ name WIRELESS
+vlan 30
+ name FACULTY
+vlan 40
+ name IT_DEPT
+vlan 50
+ name LIBRARY
+vlan 60
+ name ACCOUNTS
+vlan 70
+ name MGMT_PRINCIPAL
+vlan 80
+ name SERVERS
+vlan 99
+ name NET_MGMT
+vlan 999
+ name UNUSED_PARKING
+!
+! -------------------------------------------------------------
+! Spanning Tree - SW-CORE is root for every VLAN
+! -------------------------------------------------------------
+spanning-tree mode pvst
+spanning-tree vlan 10,20,25,30,40,50,60,70,80,99 priority 4096
+!
+! -------------------------------------------------------------
+! SVIs (inter-VLAN routing gateways)
+! -------------------------------------------------------------
+interface Vlan10
+ description ADMIN gateway
+ ip address 10.10.10.1 255.255.255.0
+ no shutdown
+!
+interface Vlan20
+ description STUDENTS gateway
+ ip address 10.10.20.1 255.255.255.0
+ ip access-group STUDENT-RESTRICT in
+ no shutdown
+!
+interface Vlan25
+ description WIRELESS gateway
+ ip address 10.10.25.1 255.255.255.0
+ ip access-group STUDENT-RESTRICT in
+ no shutdown
+!
+interface Vlan30
+ description FACULTY gateway
+ ip address 10.10.30.1 255.255.255.0
+ no shutdown
+!
+interface Vlan40
+ description IT_DEPT gateway
+ ip address 10.10.40.1 255.255.255.0
+ no shutdown
+!
+interface Vlan50
+ description LIBRARY gateway
+ ip address 10.10.50.1 255.255.255.0
+ no shutdown
+!
+interface Vlan60
+ description ACCOUNTS gateway (sensitive)
+ ip address 10.10.60.1 255.255.255.0
+ no shutdown
+!
+interface Vlan70
+ description MGMT_PRINCIPAL gateway (sensitive)
+ ip address 10.10.70.1 255.255.255.0
+ no shutdown
+!
+interface Vlan80
+ description SERVERS gateway
+ ip address 10.10.80.1 255.255.255.0
+ no shutdown
+!
+interface Vlan99
+ description NET_MGMT gateway / switch management
+ ip address 10.10.99.2 255.255.255.0
+ no shutdown
+!
+! -------------------------------------------------------------
+! Routed uplink to R-EDGE (border router)
+! -------------------------------------------------------------
+interface GigabitEthernet0/1
+ description LINK-TO-R-EDGE (campus WAN/Internet exit)
+ no switchport
+ ip address 10.10.1.1 255.255.255.252
+ no shutdown
+!
+ip route 0.0.0.0 0.0.0.0 10.10.1.2
+!
+! -------------------------------------------------------------
+! Trunk uplinks to access switches
+! -------------------------------------------------------------
+interface GigabitEthernet0/2
+ description TRUNK-TO-SW-ADMIN
+ switchport trunk encapsulation dot1q
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 10,70,99
+ switchport mode trunk
+ switchport nonegotiate
+ no shutdown
+!
+interface GigabitEthernet0/3
+ description TRUNK-TO-SW-ACCOUNTS
+ switchport trunk encapsulation dot1q
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 60,99
+ switchport mode trunk
+ switchport nonegotiate
+ no shutdown
+!
+interface GigabitEthernet0/4
+ description TRUNK-TO-SW-ACADEMIC
+ switchport trunk encapsulation dot1q
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 30,50,99
+ switchport mode trunk
+ switchport nonegotiate
+ no shutdown
+!
+interface GigabitEthernet0/5
+ description TRUNK-TO-SW-STUDENT
+ switchport trunk encapsulation dot1q
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 20,25,99
+ switchport mode trunk
+ switchport nonegotiate
+ no shutdown
+!
+interface GigabitEthernet0/6
+ description TRUNK-TO-SW-SERVER
+ switchport trunk encapsulation dot1q
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 40,80,99
+ switchport mode trunk
+ switchport nonegotiate
+ no shutdown
+!
+! Unused ports hardened (repeat pattern for all remaining Gi0/7-0/24)
+interface range GigabitEthernet0/7-24
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+!
+! -------------------------------------------------------------
+! DHCP Server - one pool per end-user VLAN
+! (Servers VLAN 80 and Net Mgmt VLAN 99 are static-only, no pool)
+! -------------------------------------------------------------
+ip dhcp excluded-address 10.10.10.1 10.10.10.49
+ip dhcp excluded-address 10.10.20.1 10.10.20.49
+ip dhcp excluded-address 10.10.25.1 10.10.25.49
+ip dhcp excluded-address 10.10.30.1 10.10.30.49
+ip dhcp excluded-address 10.10.40.1 10.10.40.49
+ip dhcp excluded-address 10.10.50.1 10.10.50.49
+ip dhcp excluded-address 10.10.60.1 10.10.60.49
+ip dhcp excluded-address 10.10.70.1 10.10.70.49
+!
+ip dhcp pool ADMIN-POOL
+ network 10.10.10.0 255.255.255.0
+ default-router 10.10.10.1
+ dns-server 10.10.80.10
+ domain-name college.local
+!
+ip dhcp pool STUDENTS-POOL
+ network 10.10.20.0 255.255.255.0
+ default-router 10.10.20.1
+ dns-server 10.10.80.10
+ domain-name college.local
+!
+ip dhcp pool WIRELESS-POOL
+ network 10.10.25.0 255.255.255.0
+ default-router 10.10.25.1
+ dns-server 10.10.80.10
+ domain-name college.local
+!
+ip dhcp pool FACULTY-POOL
+ network 10.10.30.0 255.255.255.0
+ default-router 10.10.30.1
+ dns-server 10.10.80.10
+ domain-name college.local
+!
+ip dhcp pool IT-POOL
+ network 10.10.40.0 255.255.255.0
+ default-router 10.10.40.1
+ dns-server 10.10.80.10
+ domain-name college.local
+!
+ip dhcp pool LIBRARY-POOL
+ network 10.10.50.0 255.255.255.0
+ default-router 10.10.50.1
+ dns-server 10.10.80.10
+ domain-name college.local
+!
+ip dhcp pool ACCOUNTS-POOL
+ network 10.10.60.0 255.255.255.0
+ default-router 10.10.60.1
+ dns-server 10.10.80.10
+ domain-name college.local
+!
+ip dhcp pool MGMT-POOL
+ network 10.10.70.0 255.255.255.0
+ default-router 10.10.70.1
+ dns-server 10.10.80.10
+ domain-name college.local
+!
+! -------------------------------------------------------------
+! Extended ACL - Students/Wireless restricted from Accounts & Mgmt
+! Applied inbound on Vlan20 and Vlan25 SVIs above
+! -------------------------------------------------------------
+ip access-list extended STUDENT-RESTRICT
+ remark Deny Students/Wireless -> sensitive Accounts & Management subnets
+ deny   ip 10.10.20.0 0.0.0.255 10.10.60.0 0.0.0.255
+ deny   ip 10.10.20.0 0.0.0.255 10.10.70.0 0.0.0.255
+ deny   ip 10.10.25.0 0.0.0.255 10.10.60.0 0.0.0.255
+ deny   ip 10.10.25.0 0.0.0.255 10.10.70.0 0.0.0.255
+ remark Explicitly permit required services to the server VLAN
+ permit udp 10.10.20.0 0.0.0.255 host 10.10.80.10 eq 53
+ permit udp 10.10.25.0 0.0.0.255 host 10.10.80.10 eq 53
+ permit tcp 10.10.20.0 0.0.0.255 host 10.10.80.10 eq 80
+ permit tcp 10.10.25.0 0.0.0.255 host 10.10.80.10 eq 80
+ permit icmp 10.10.20.0 0.0.0.255 host 10.10.80.10
+ permit icmp 10.10.25.0 0.0.0.255 host 10.10.80.10
+ remark Permit everything else, e.g. Internet access via NAT at R-EDGE
+ permit ip any any
+!
+end

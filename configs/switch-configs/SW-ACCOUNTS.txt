@@ -1,0 +1,78 @@
+! =============================================================
+! SW-ACCOUNTS  -  Access Switch: Accounts / Finance (VLAN 60)
+! Kept on its own dedicated switch due to the sensitivity of
+! financial data - smaller blast radius if ever compromised,
+! and the single, clear ACL enforcement target from Students.
+! Platform: Cisco Catalyst 2960-24TT
+! =============================================================
+
+hostname SW-ACCOUNTS
+!
+no ip domain-lookup
+ip domain-name college.local
+enable secret Cl@ssC0llege!Accounts
+service password-encryption
+!
+banner motd #
+***************************************************************
+ AUTHORIZED ACCESS ONLY - College Access Switch (SW-ACCOUNTS)
+ Restricted Financial Systems Segment
+***************************************************************
+#
+!
+username netadmin privilege 15 secret N3tAdm1n@Accounts
+crypto key generate rsa modulus 2048
+ip ssh version 2
+!
+line con 0
+ password C0ns0le@Accounts
+ login
+line vty 0 4
+ login local
+ transport input ssh
+!
+logging buffered 16384 informational
+!
+vlan 60
+ name ACCOUNTS
+vlan 99
+ name NET_MGMT
+vlan 999
+ name UNUSED_PARKING
+!
+spanning-tree mode pvst
+!
+interface Vlan99
+ description Switch management interface
+ ip address 10.10.99.12 255.255.255.0
+ no shutdown
+ip default-gateway 10.10.99.1
+!
+interface GigabitEthernet0/1
+ description TRUNK-TO-SW-CORE
+ switchport trunk encapsulation dot1q
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 60,99
+ switchport mode trunk
+ switchport nonegotiate
+ no shutdown
+!
+interface range FastEthernet0/1-2
+ description ACCESS-PORT :: PC-ACCOUNTS1 / PC-ACCOUNTS2
+ switchport mode access
+ switchport access vlan 60
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation restrict
+ switchport port-security mac-address sticky
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+!
+interface range FastEthernet0/3-24
+ description UNUSED - administratively shut down
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+!
+end
