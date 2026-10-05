@@ -10,8 +10,7 @@ remote office, and applies core networking principles — IP addressing,
 VLAN segmentation, routing, DHCP, DNS, NAT, and basic network security —
 in a single, coherent design.
 
-The project was built as part of an MSc Information Systems with Cloud
-Computing programme, as a practical application of networking and
+This project was built as part of an academic project, as a practical application of networking and
 infrastructure concepts covered in coursework.
 
 ## Project Objectives
@@ -236,8 +235,3 @@ access control lists, deploying a wireless network, connecting a remote
 site over a WAN link, and using standard troubleshooting commands to
 verify network behaviour.
 
-## Author
-
-**Kiran Bibi**
-MSc Information Systems with Cloud Computing
-Dublin Business School
