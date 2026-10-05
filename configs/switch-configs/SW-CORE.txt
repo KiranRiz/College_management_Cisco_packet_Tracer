@@ -1,9 +1,23 @@
 ! =============================================================
 ! SW-CORE  -  Layer-3 Core/Distribution Switch
 ! Role: Inter-VLAN routing (SVIs), DHCP server for all department
-!       VLANs, central enforcement point for the Student/Wireless
-!       restriction ACL, spanning-tree root for every VLAN
+!       VLANs, spanning-tree root for every VLAN
 ! Platform: Cisco Catalyst 3560-24PS (multilayer switch)
+!
+! NOTE ON SCOPE (verified directly in Packet Tracer 9.0): the
+! Student/Wireless restriction ACL was originally designed to be
+! applied here, on the Vlan20/Vlan25 SVIs ("ip access-group
+! STUDENT-RESTRICT in"). Tested directly on this device: the
+! command is accepted with no error, but never actually takes
+! effect - confirmed three ways (show ip interface <vlan>, show
+! running-config, and a live ping test that still got through).
+! This is a genuine simulated-3560 limitation in this Packet
+! Tracer build, not a configuration mistake. The ACL enforcement
+! was moved to port ACLs on the access switches instead (verified
+! working there - see SW-STUDENT.txt) and the STUDENT-RESTRICT
+! ACL definition below is kept for reference/documentation only;
+! it is not applied to any interface on this device. Full
+! verification notes: docs/security.md section 6.
 ! =============================================================
 
 hostname SW-CORE
@@ -78,13 +92,11 @@ interface Vlan10
 interface Vlan20
  description STUDENTS gateway
  ip address 10.10.20.1 255.255.255.0
- ip access-group STUDENT-RESTRICT in
  no shutdown
 !
 interface Vlan25
  description WIRELESS gateway
  ip address 10.10.25.1 255.255.255.0
- ip access-group STUDENT-RESTRICT in
  no shutdown
 !
 interface Vlan30
@@ -145,7 +157,7 @@ interface GigabitEthernet0/2
  switchport nonegotiate
  no shutdown
 !
-interface GigabitEthernet0/3
+interface FastEthernet0/1
  description TRUNK-TO-SW-ACCOUNTS
  switchport trunk encapsulation dot1q
  switchport trunk native vlan 99
@@ -154,7 +166,7 @@ interface GigabitEthernet0/3
  switchport nonegotiate
  no shutdown
 !
-interface GigabitEthernet0/4
+interface FastEthernet0/2
  description TRUNK-TO-SW-ACADEMIC
  switchport trunk encapsulation dot1q
  switchport trunk native vlan 99
@@ -163,7 +175,7 @@ interface GigabitEthernet0/4
  switchport nonegotiate
  no shutdown
 !
-interface GigabitEthernet0/5
+interface FastEthernet0/3
  description TRUNK-TO-SW-STUDENT
  switchport trunk encapsulation dot1q
  switchport trunk native vlan 99
@@ -172,7 +184,7 @@ interface GigabitEthernet0/5
  switchport nonegotiate
  no shutdown
 !
-interface GigabitEthernet0/6
+interface FastEthernet0/4
  description TRUNK-TO-SW-SERVER
  switchport trunk encapsulation dot1q
  switchport trunk native vlan 99
@@ -181,8 +193,10 @@ interface GigabitEthernet0/6
  switchport nonegotiate
  no shutdown
 !
-! Unused ports hardened (repeat pattern for all remaining Gi0/7-0/24)
-interface range GigabitEthernet0/7-24
+! Unused ports hardened
+! NOTE: 3560-24PS has 24x FastEthernet (Fa0/1-24) + 2x GigabitEthernet (Gi0/1-2) only.
+! Fa0/1-0/4 are used above for access-switch trunks; Fa0/5-24 are unused.
+interface range FastEthernet0/5-24
  switchport mode access
  switchport access vlan 999
  shutdown
@@ -249,8 +263,9 @@ ip dhcp pool MGMT-POOL
  domain-name college.local
 !
 ! -------------------------------------------------------------
-! Extended ACL - Students/Wireless restricted from Accounts & Mgmt
-! Applied inbound on Vlan20 and Vlan25 SVIs above
+! Reference copy only - NOT applied on this device (see NOTE at
+! top of file). The working copy of this ACL, actually applied
+! to interfaces, lives on SW-STUDENT.txt.
 ! -------------------------------------------------------------
 ip access-list extended STUDENT-RESTRICT
  remark Deny Students/Wireless -> sensitive Accounts & Management subnets

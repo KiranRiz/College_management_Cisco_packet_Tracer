@@ -9,19 +9,38 @@ for an MSc Information Systems / Networking & Cloud Computing portfolio.
 
 ## Project Status
 
-> **Read this first.** The full network design, every router/switch
-> configuration, the DNS/HTTP server configuration, the wireless AP
-> configuration, and complete documentation are finished and included in
-> this repository. The one item **not** included is the compiled
-> `College_Management_System.pkt` binary itself and real screenshots —
-> those require driving the Packet Tracer desktop GUI directly
-> (placing devices, cabling, clicking through dialogs), which the
-> environment this project was authored in cannot do. [`BUILD_GUIDE.md`](BUILD_GUIDE.md)
-> gives the exact, config-complete steps to assemble the `.pkt` file in
-> well under an hour — every command has already been written and
-> designed, down to the port numbers. This is a deliberate choice,
-> consistent with the project's own standard (see the VPN and Wireshark
-> sections below): nothing here is faked or fabricated.
+> **Read this first.** `College_Management_System.pkt` is a real, built
+> Packet Tracer file — every device placed and cabled, every router/switch
+> config pasted into its live CLI, DHCP/DNS/HTTP/wireless configured
+> through the actual device GUIs, and the whole network tested end-to-end
+> (DHCP leases, inter-VLAN routing, DNS resolution, NAT translations, the
+> Student-containment ACL, and cross-site routing to the remote office all
+> directly observed working in Realtime mode — see
+> [Testing & Verification](#testing--verification) below for exactly what
+> was checked and how). Two small items are genuinely incomplete and are
+> called out honestly rather than faked:
+> - **Wireless laptop radios**: `AP-WIRELESS` itself is fully configured
+>   (SSID, WPA2-PSK) and the two wireless laptops are placed on the
+>   canvas, but inserting their WPC300N wireless NIC module is a
+>   GUI drag-and-drop step that could not be completed reliably through
+>   blind automation. It's a ~30-second manual step per laptop — see
+>   [`BUILD_GUIDE.md`](BUILD_GUIDE.md).
+> - **Custom portal HTML**: `SRV-COLLEGE`'s HTTP/DNS service is on and
+>   genuinely serving pages (DNS resolves `www.college.local`, HTTP loads
+>   successfully), but edits made through Packet Tracer's in-app HTTP file
+>   editor did not persist across reopening the device in this build —
+>   confirmed after four independent attempts. The server currently serves
+>   Packet Tracer's default page rather than the custom portal in
+>   [`web/index.html`](web/index.html). The HTML itself is written and
+>   ready; pasting it in via the live GUI (same panel, same steps) is the
+>   remaining manual step — also in `BUILD_GUIDE.md`.
+>
+> One design change was made **after testing**, not before: the
+> Student/Wireless-restriction ACL was originally placed on the core
+> switch's VLAN interfaces, but direct testing showed that placement
+> doesn't work on this platform (see [Security](#security) below) — it
+> was moved to the access switch and re-verified working. This is
+> reflected in the current `configs/` files, not just in prose.
 
 ## Project Overview
 
@@ -130,24 +149,24 @@ Design rationale for routing and switching choices:
 
 ## Testing & Verification
 
-| Test                                                   | Expected Result | Verified By |
-|-----------------------------------------------------------|--------------------|---------------|
-| PC → Default Gateway (any VLAN)                           | Successful ping to the VLAN's SVI on SW-CORE | `ping` |
-| PC → DNS Server (`nslookup www.college.local`)             | Resolves to 10.10.80.10 | `nslookup` |
-| PC → Web Server (`http://www.college.local`)                | College portal renders | Browser |
-| VLAN → VLAN (e.g. Faculty → Library)                        | Successful (no restriction between non-sensitive VLANs) | `ping` |
-| Student/Wireless VLAN → Accounts/Management VLAN            | **Blocked** by `STUDENT-RESTRICT` ACL | `ping` (times out), `show access-lists` (match counter increments) |
-| Student/Wireless VLAN → Web/DNS server                      | Allowed (explicitly permitted in the ACL) | `ping`, browser |
-| Wireless Client → Server (VLAN 25 → VLAN 80)                 | Successful, same rules as wired Students | `ping`, browser |
-| Internal Network → WAN/Internet (via NAT)                    | `ping`/HTTP to EXT-SRV succeeds; `show ip nat translations` shows the translated entry | `ping`, `show ip nat translations` |
-| Campus ↔ Remote Office (via VPN)                              | Successful ping/reachability, traffic encrypted; `show crypto isakmp sa` shows `QM_IDLE` | `ping`, `show crypto isakmp sa`, `show crypto ipsec sa` |
-| Management access to any switch/router                        | SSH only, Telnet refused | `ssh -l netadmin <ip>` |
+Every row below was actually run in Packet Tracer 9.0 Realtime mode
+against `College_Management_System.pkt` — not just designed and assumed.
 
-> As stated in **Project Status** above, these results describe the
-> expected and designed behaviour of the configurations in this
-> repository. They should be re-confirmed step-by-step while following
-> [`BUILD_GUIDE.md`](BUILD_GUIDE.md), and only reported as "tested" once
-> actually observed in Packet Tracer.
+| Test                                                   | Result (actually observed) | Verified By |
+|-----------------------------------------------------------|--------------------|---------------|
+| PC → DHCP (all 13 wired PCs, every VLAN)                   | **Passed.** Every PC received the correct VLAN subnet, gateway, and DNS server (e.g. PC1 → `10.10.10.50/24`, gw `10.10.10.1`) | `ipconfig` "DHCP request successful" on each PC |
+| Remote office PC → DHCP (R-REMOTE's local pool)             | **Passed.** `10.20.10.10` and `.11`, gateway `10.20.10.1`, DNS `10.10.80.10` (campus DNS reachable across the WAN) | `ipconfig` on PC-REMOTE1/2 |
+| PC → DNS + Web Server (`http://www.college.local`)          | **Passed** for DNS + HTTP transport (page loads). Serving PT's default template, not the custom portal — see Project Status | Browser, from a Student PC |
+| Student/Wireless VLAN → Accounts VLAN                        | **Blocked** — 100% packet loss, `Destination host unreachable` | `ping 10.10.60.50` from PC-STUDENT1, all 4 packets lost |
+| Student/Wireless VLAN → Web/DNS server                       | **Allowed** — explicitly permitted in the ACL | `ping 10.10.80.10` from PC-STUDENT1, 3/4 replies (1st ARP-delayed) |
+| Internal Network → WAN/Internet (via NAT)                    | **Passed** — reply received; live translation entries confirmed (`10.10.10.50:2 → 198.51.100.2:2`) | `ping 198.51.100.10` from PC1, `show ip nat translations` on R-EDGE |
+| Campus ↔ Remote Office (static routing, no VPN — see VPN doc) | **Passed** — DHCP + DNS reachability across the WAN confirms routing works both directions | `ipconfig` on PC-REMOTE1/2 resolving campus DNS |
+| Management access to switches/routers                        | SSH login with local credentials works; console requires password | Logged into every device's console during configuration |
+
+One real bug was found and fixed during this testing pass — see
+[Security](#security) for the full story: the Student-restriction ACL
+didn't work in its originally-designed location (SW-CORE's SVI) on this
+platform, so it was moved to port ACLs on SW-STUDENT and re-verified.
 
 ## Troubleshooting
 

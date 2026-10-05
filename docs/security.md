@@ -83,41 +83,79 @@ actor and accidentally re-enabled, it lands in a VLAN that goes nowhere.
   since it is the one device that should always be the center of the
   topology.
 
-## 6. Extended ACL — Student/Wireless Containment
+## 6. Extended ACL — Student/Wireless Containment (verified working, with a platform correction)
 
 **Requirement:** Students (wired, VLAN 20, and wireless, VLAN 25) must be
 able to reach the DNS server and the college web portal, and the Internet
 (via NAT), but must **not** be able to reach the Accounts (VLAN 60) or
 Management/Principal (VLAN 70) subnets.
 
-Implemented as extended ACL `110` on `SW-CORE`, applied inbound on the
-`Vlan20` and `Vlan25` SVIs:
+**Original design, and what was actually found when testing it:** the ACL
+was first applied inbound on `SW-CORE`'s `Vlan20`/`Vlan25` SVIs (the
+textbook-correct location for this policy on a Layer-3 switch). Tested
+directly in Packet Tracer 9.0: the command
+(`ip access-group STUDENT-RESTRICT in` under `interface Vlan20`) is
+accepted with no error — but never actually takes effect. Confirmed three
+independent ways before concluding this was a real platform limitation and
+not a mistake:
+
+1. `show ip interface vlan20` continued to report `Inbound access list is
+   not set` immediately after applying it (and after `write memory`).
+2. `show running-config | section Vlan20` confirmed the interface's saved
+   config genuinely has no `ip access-group` line.
+3. A live `ping` from a Student PC to an Accounts PC still succeeded
+   (3 of 4 replies) — the deny rule was not being enforced in practice.
+
+This is a limitation of the simulated Catalyst 3560 SVI implementation in
+this Packet Tracer build, not a configuration error — the identical
+`ip access-group` syntax is standard, correct IOS.
+
+**What actually works, and is what's deployed:** the same ACL logic
+applied as a **port ACL (PACL)** on the Layer-2 access ports of
+`SW-STUDENT` (a 2960) — `FastEthernet0/1` and `FastEthernet0/2` (the wired
+student PCs) and `FastEthernet0/3` (the AP-WIRELESS uplink, covering
+wireless clients). This was verified the same rigorous way:
+
+1. `show running-config | begin FastEthernet0/1` confirmed
+   `ip access-group STUDENT-RESTRICT in` genuinely saved under the port.
+2. A live `ping` from PC-STUDENT1 to an Accounts PC afterward returned
+   `Destination host unreachable` for all 4 packets (100% loss) — blocked.
+3. A live `ping` and browser test from PC-STUDENT1 to the web/DNS server
+   (`10.10.80.10`) succeeded — explicitly permitted traffic still works.
 
 ```
 ip access-list extended STUDENT-RESTRICT
  remark Deny Students/Wireless -> sensitive Accounts & Management subnets
- deny   ip 10.10.20.0 0.0.0.255 10.10.60.0 0.0.0.255
- deny   ip 10.10.20.0 0.0.0.255 10.10.70.0 0.0.0.255
- deny   ip 10.10.25.0 0.0.0.255 10.10.60.0 0.0.0.255
- deny   ip 10.10.25.0 0.0.0.255 10.10.70.0 0.0.0.255
+ deny   ip any 10.10.60.0 0.0.0.255
+ deny   ip any 10.10.70.0 0.0.0.255
  remark Explicitly permit required services to the server VLAN
- permit udp 10.10.20.0 0.0.0.255 host 10.10.80.10 eq 53
- permit udp 10.10.25.0 0.0.0.255 host 10.10.80.10 eq 53
- permit tcp 10.10.20.0 0.0.0.255 host 10.10.80.10 eq 80
- permit tcp 10.10.25.0 0.0.0.255 host 10.10.80.10 eq 80
- permit icmp 10.10.20.0 0.0.0.255 host 10.10.80.10
- permit icmp 10.10.25.0 0.0.0.255 host 10.10.80.10
+ permit udp any host 10.10.80.10 eq domain
+ permit tcp any host 10.10.80.10 eq www
+ permit icmp any host 10.10.80.10
  remark Permit everything else (e.g. Internet access via NAT at R-EDGE)
  permit ip any any
 ```
 
-Full configuration with interface application is in
-[`configs/switch-configs/SW-CORE.txt`](../configs/switch-configs/SW-CORE.txt).
+Applied under `interface FastEthernet0/1`, `0/2`, and `0/3` on
+`SW-STUDENT`. Full configuration:
+[`configs/switch-configs/SW-STUDENT.txt`](../configs/switch-configs/SW-STUDENT.txt).
+A reference-only copy of the original SVI-targeted ACL (not applied to any
+interface) is kept in
+[`configs/switch-configs/SW-CORE.txt`](../configs/switch-configs/SW-CORE.txt)
+with a note explaining why it was moved.
 
 **Why this order:** ACLs are processed top-down, first match wins. The
 specific `deny` statements for Accounts/Management must come *before* the
 general `permit ip any any`, otherwise the explicit denies would never be
 reached.
+
+**Trade-off of the port-ACL approach:** since the rule now lives per-port
+on the access switch instead of centrally on the core switch, every new
+student-facing access port added in the future needs the same
+`ip access-group STUDENT-RESTRICT in` line applied to it explicitly — it
+is not automatically inherited the way a single SVI-level policy would
+have been. For a network this size (one student access switch), that's a
+minor, clearly-documented maintenance note rather than a real limitation.
 
 ## 7. NAT / PAT (see also [routing.md](routing.md))
 
@@ -129,13 +167,11 @@ Traffic destined for the Remote Office over the VPN is explicitly
 original private addresses end-to-end for routing to work correctly at the
 remote site.
 
-## 8. Firewall — IOS CBAC (Context-Based Access Control)
+## 8. Firewall — Perimeter ACL (verified platform limitation on CBAC)
 
-**What's implemented:** On `R-EDGE`'s WAN-facing interface, an inbound
-extended ACL denies all unsolicited inbound connections from the Internet
-by default, while `ip inspect` (CBAC) is applied outbound so that
-connections *initiated from inside* the campus (web browsing, DNS queries)
-are dynamically permitted back in for their return traffic only.
+**What was attempted:** An IOS CBAC (Context-Based Access Control)
+stateful firewall was originally designed for `R-EDGE`'s WAN-facing
+interface:
 
 ```
 ip inspect name FW-INSPECT tcp
@@ -148,21 +184,43 @@ interface GigabitEthernet0/1
  ip inspect FW-INSPECT out
 ```
 
-**What it protects:** The campus LAN from unsolicited inbound connections
-originating on the Internet — i.e., nothing outside can initiate a new
-session into any campus host, but anything a campus host starts (browsing,
-DNS lookups) works normally.
+**What actually happened (verified directly on the device, not assumed):**
+every `ip inspect` command was rejected on `R-EDGE` with
+`% Unrecognized command` / `% Invalid input detected`. Packet Tracer
+9.0's simulated IOS for the ISR platform used here does not implement
+CBAC at all. Per this project's standard, that's not faked — no
+`ip inspect` lines appear in
+[`configs/router-configs/R-EDGE.txt`](../configs/router-configs/R-EDGE.txt).
 
-**Packet Tracer / CBAC limitations (documented honestly):**
-- CBAC is a legacy IOS feature; modern real-world deployments use
-  **Zone-Based Policy Firewall (ZFW)** or a dedicated firewall appliance
-  (e.g. Cisco ASA — Packet Tracer does ship an ASA5505 model, but it was
-  not used here to keep the topology focused and because CBAC already
-  demonstrates the stateful-inspection *concept* clearly on hardware
-  already present in the design).
-- CBAC/PT does not provide deep packet inspection, application-layer
-  filtering, or intrusion prevention — it only tracks TCP/UDP/ICMP session
-  state to decide whether return traffic should be allowed back in.
+**What's actually implemented instead:** the extended ACL `WAN-IN`,
+applied inbound on `R-EDGE`'s WAN interface, genuinely is in the running
+config and genuinely works — it default-denies all unsolicited inbound
+traffic from the Internet while explicitly permitting the ICMP replies
+needed for outbound troubleshooting (ping/traceroute from inside still
+work normally, since TCP/UDP sessions *initiated from inside* get their
+replies back regardless of this ACL — only *inbound-initiated* connections
+are blocked). This is a real, verified, stateless packet filter — the
+firewall "default-deny inbound" concept is demonstrated, just without
+CBAC's stateful session tracking on top of it.
+
+**What it protects:** The campus LAN from unsolicited inbound connections
+originating on the Internet.
+
+**Limitations (documented honestly):**
+- This is **stateless** filtering (fixed rules only) — not the stateful,
+  connection-aware inspection CBAC or a real firewall appliance would
+  provide. It cannot tell "this inbound TCP packet is part of a session I
+  already allowed out" from "this is a brand-new inbound TCP SYN" the way
+  a stateful firewall can; it only matches on the fields explicitly
+  written into the ACL.
+- Deep packet inspection, application-layer filtering, and intrusion
+  prevention are out of scope for both the attempted CBAC approach and
+  this ACL-based fallback.
+- A real deployment would use **Zone-Based Policy Firewall (ZFW)** or a
+  dedicated appliance (e.g. Cisco ASA — Packet Tracer does ship an
+  ASA5505 model; it wasn't substituted in here, to keep the verification
+  findings in this section specific to the originally-designed platform
+  rather than changing the design to dodge the limitation).
 - This is a **concept demonstration appropriate for a student portfolio**,
   not a production-grade firewall design.
 

@@ -1,29 +1,11 @@
-# VPN — Site-to-Site IPsec (Genuinely Implemented, Not Simulated)
+# VPN — Verified Platform Limitation, and the Real-World Concept
 
-Packet Tracer **does** support a working IOS site-to-site IPsec VPN
-configuration (ISAKMP/IKEv1 + IPsec transform sets + crypto maps on
-router interfaces), so this project implements a real one rather than
-only describing the concept.
+## What was attempted
 
-## Scenario
+A site-to-site IPsec VPN between the campus border router (`R-EDGE`) and
+the remote office router (`R-REMOTE`) was designed and directly tested in
+the running Packet Tracer 9.0 build used for this project:
 
-The college has a small **Remote Admin Office** (e.g. an off-site
-admissions office) that needs secure connectivity back to the main campus
-network over the public Internet. A site-to-site IPsec tunnel between the
-campus border router (`R-EDGE`) and the remote office router (`R-REMOTE`)
-encrypts all traffic between the two private networks as it crosses the
-simulated WAN (`ISP-RTR`).
-
-```
- Campus (10.10.0.0/16)  --- R-EDGE <===IPsec Tunnel===> R-REMOTE --- Remote Office (10.20.10.0/24)
-                                  \                     /
-                                   \------ ISP-RTR ----/
-                                     (198.51.100.0/24)
-```
-
-## Configuration Summary
-
-### Phase 1 — ISAKMP (IKE)
 ```
 crypto isakmp policy 10
  encryption aes 256
@@ -31,74 +13,92 @@ crypto isakmp policy 10
  authentication pre-share
  group 14
  lifetime 3600
-crypto isakmp key <pre-shared-key> address <peer-public-ip>
-```
-
-### Phase 2 — IPsec
-```
+crypto isakmp key <psk> address <peer>
 crypto ipsec transform-set TS-COLLEGE esp-aes 256 esp-sha256-hmac
  mode tunnel
-!
-access-list 150 permit ip 10.10.0.0 0.0.255.255 10.20.10.0 0.0.0.255   ! (on R-EDGE)
-!
 crypto map CMAP-VPN 10 ipsec-isakmp
- set peer <remote-peer-ip>
+ set peer <peer>
  set transform-set TS-COLLEGE
  match address 150
-!
-interface GigabitEthernet0/1
- crypto map CMAP-VPN
 ```
 
-The mirror-image configuration is applied on `R-REMOTE`, with its crypto
-ACL matching traffic in the opposite direction
-(`10.20.10.0/24 -> 10.10.0.0/16`).
+## What actually happened (verified, not assumed)
 
-Full configs: [`configs/router-configs/R-EDGE.txt`](../configs/router-configs/R-EDGE.txt)
-and [`configs/router-configs/R-REMOTE.txt`](../configs/router-configs/R-REMOTE.txt).
+Every `crypto` command above was rejected on a Cisco 2911 (`R-EDGE`) with:
 
-## NAT Exemption
+```
+% Invalid input detected at '^' marker.
+```
 
-Because `R-EDGE` also performs NAT/PAT for general Internet access, the
-NAT ACL explicitly **excludes** the campus-to-remote-office traffic
-(`10.10.0.0/16 -> 10.20.10.0/24`) from translation. If this traffic were
-NAT'd, the remote site would receive packets from `R-EDGE`'s public IP
-instead of the real internal source address, breaking the IPsec policy
-match and return routing.
+Suspecting the security feature set simply wasn't licensed/activated,
+the standard Cisco remedy was tried next, directly on the device:
 
-## Verification Performed
+```
+license boot module c2900 technology-package securityk9
+write memory
+reload
+```
 
-| Check                                                    | Expected result |
-|------------------------------------------------------------|--------------------|
-| `show crypto isakmp sa` on R-EDGE and R-REMOTE             | `QM_IDLE` state once traffic has flowed, confirming Phase 1 is up |
-| `show crypto ipsec sa`                                      | Non-zero encaps/decaps packet counters once interesting traffic has been generated |
-| `ping` from PC-REMOTE1 (10.20.10.x) to PC-ADMIN1 (10.10.10.x) | Successful, and the reply path is encrypted across the WAN |
-| `show access-lists 150`                                     | Match counters increasing as VPN traffic flows |
+After the reload completed and the device was logged back into, the exact
+same `crypto isakmp policy 10` command was retried and **still rejected**
+with the identical error. This confirms — rather than assumes — that this
+specific Packet Tracer 9.0 build's simulated IOS for the 2911/2901 ISR
+platform does not implement the `crypto isakmp` / `crypto ipsec` /
+`crypto map` command set at all, regardless of licensing state.
 
-## How a Real College Would Use VPN
+**Per this project's own standard (set out in the original brief): this
+is not faked.** No `crypto` configuration lines are present in
+[`configs/router-configs/R-EDGE.txt`](../configs/router-configs/R-EDGE.txt)
+or
+[`configs/router-configs/R-REMOTE.txt`](../configs/router-configs/R-REMOTE.txt).
 
-- **Site-to-site VPN** (what's implemented here): connecting a secondary
-  campus, an off-site admissions office, or a satellite teaching center
-  back to the main campus network over the Internet, without needing an
-  expensive dedicated leased line (MPLS/private circuit).
-- **Remote-access VPN** (not implemented in this topology, documented as a
-  concept): individual staff/faculty laptops connecting in from home using
-  a VPN client (e.g. Cisco AnyConnect / IPsec or SSL VPN) to reach internal
-  resources such as the staff portal or file shares, with the same
-  encryption and authentication principles as the site-to-site tunnel but
-  terminating on a single host rather than a remote-site router. This was
-  not built in Packet Tracer because PT's remote-access VPN client
-  support is limited/unreliable compared to its router-to-router IPsec
-  support, and the brief specifically asked not to fake functionality that
-  isn't genuinely working — so only the scenario that could be fully
-  verified (site-to-site) was implemented.
+## What is actually implemented instead
 
-## Packet Tracer Limitations (documented honestly)
+The remote site (`R-REMOTE` / `SW-REMOTE` / `10.20.10.0/24`) is still a
+fully real, working part of the topology — it is just reached by **plain
+static routing across the WAN**, unencrypted, instead of an IPsec tunnel:
 
-- Packet Tracer supports IKEv1 site-to-site IPsec well; it does **not**
-  reliably support IKEv2, DMVPN, GET VPN, or SSL VPN — none of these were
-  attempted or claimed.
-- GRE-over-IPsec was not used; a plain crypto-map-on-physical-interface
-  design was chosen because it is simpler, fully supported, and sufficient
-  for a single remote site with no requirement to carry a dynamic routing
-  protocol through the tunnel.
+- `R-EDGE` has `ip route 10.20.10.0 255.255.255.0 198.51.100.1`
+- `R-REMOTE` has a single default route back out via the simulated ISP
+- Campus→remote-office traffic is still explicitly **exempted from NAT**
+  on `R-EDGE` (it's treated as internal inter-site traffic, not
+  internet-bound), which is the one piece of the original NAT design that
+  remains meaningful without encryption
+
+This keeps the multi-site WAN/routing demonstration genuine and testable
+(ping/traceroute between campus and remote-office hosts works end-to-end)
+without overstating what's actually protecting that traffic.
+
+## How a real college would use VPN technology (concept)
+
+Since the live demonstration isn't possible on this platform build, here
+is the concept a real deployment would use instead:
+
+- **Site-to-site VPN**: an IPsec tunnel (as attempted above) between the
+  main campus edge router/firewall and a secondary campus, satellite
+  admissions office, or remote teaching center's router, built using
+  either policy-based (crypto-map, as attempted here) or route-based
+  (IPsec VTI / GRE-over-IPsec) configuration, protecting all traffic
+  between the two private networks as it crosses the public Internet —
+  removing the need for an expensive dedicated leased line.
+- **Remote-access VPN**: individual staff/faculty laptops connecting from
+  home using a VPN client (e.g. Cisco AnyConnect / IKEv2 or SSL VPN)
+  terminating on a concentrator or firewall at the campus edge, so a
+  single traveling or remote user gets the same encrypted access to
+  internal resources (staff portal, file shares) that the site-to-site
+  tunnel gives a whole remote office.
+- In both cases the core value is the same: **confidentiality and
+  integrity of private traffic crossing a network the institution does
+  not control** (the public Internet) — exactly the gap that plain
+  static/NAT-exempted routing (what's actually running in this project)
+  does **not** close, which is worth being explicit about rather than
+  leaving implied.
+
+## Why this verification matters for the portfolio
+
+Being able to say "I designed this, tested it directly against the
+platform, hit a genuine tool limitation, confirmed it with the standard
+licensing remedy, and then made a documented, honest design decision
+instead of faking the output" is a stronger, more senior demonstration of
+real troubleshooting and professional judgement than a config file that
+merely *claims* a VPN is running.

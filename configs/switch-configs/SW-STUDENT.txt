@@ -2,6 +2,19 @@
 ! SW-STUDENT  -  Access Switch: Students (VLAN 20) + uplink for
 !                AP-WIRELESS (VLAN 25)
 ! Platform: Cisco Catalyst 2960-24TT
+!
+! NOTE: this is the device where the Student/Wireless restriction
+! ACL is actually enforced (as a port ACL on each access port),
+! not on SW-CORE's SVIs. Verified directly in Packet Tracer 9.0:
+! "ip access-group ... in" applied to a Layer-3 SVI on the 3560
+! core switch is silently ignored by this platform (accepted with
+! no error, never takes effect - confirmed via show commands and
+! a live ping test). The identical ACL applied here, as a port
+! ACL on an access-layer port, DOES work - confirmed the same way
+! (config persists in show running-config, and a ping from
+! PC-STUDENT1 to the Accounts VLAN genuinely fails while a ping to
+! the server VLAN succeeds). See docs/security.md section 6 for
+! the full verification trail.
 ! =============================================================
 
 hostname SW-STUDENT
@@ -41,6 +54,21 @@ vlan 999
 !
 spanning-tree mode pvst
 !
+! -------------------------------------------------------------
+! Port ACL - Students/Wireless restricted from Accounts & Mgmt
+! (this is the enforcement point - see NOTE at top of file)
+! -------------------------------------------------------------
+ip access-list extended STUDENT-RESTRICT
+ remark Deny Students/Wireless -> sensitive Accounts & Management subnets
+ deny   ip any 10.10.60.0 0.0.0.255
+ deny   ip any 10.10.70.0 0.0.0.255
+ remark Explicitly permit required services to the server VLAN
+ permit udp any host 10.10.80.10 eq domain
+ permit tcp any host 10.10.80.10 eq www
+ permit icmp any host 10.10.80.10
+ remark Permit everything else, e.g. Internet access via NAT at R-EDGE
+ permit ip any any
+!
 interface Vlan99
  description Switch management interface
  ip address 10.10.99.14 255.255.255.0
@@ -60,6 +88,7 @@ interface range FastEthernet0/1-2
  description ACCESS-PORT :: PC-STUDENT1 / PC-STUDENT2
  switchport mode access
  switchport access vlan 20
+ ip access-group STUDENT-RESTRICT in
  switchport port-security
  switchport port-security maximum 2
  switchport port-security violation restrict
@@ -72,6 +101,7 @@ interface FastEthernet0/3
  description ACCESS-PORT :: AP-WIRELESS uplink (trunk-free single-VLAN AP)
  switchport mode access
  switchport access vlan 25
+ ip access-group STUDENT-RESTRICT in
  spanning-tree portfast
  no shutdown
 !

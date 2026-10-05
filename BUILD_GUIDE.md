@@ -1,24 +1,48 @@
 # Build Guide — Assembling `College_Management_System.pkt`
 
-## Why this guide exists
+## Current status: the .pkt already exists and is already tested
 
-This repository was built in an automated environment that can write
-files (configs, documentation, HTML) but **cannot drive the Cisco Packet
-Tracer GUI** (there is no mouse/keyboard/drag-and-drop automation for
-desktop applications available in that environment). Packet Tracer's
-`.pkt` project file is also a proprietary, versioned binary format — not
-something safe to hand-author outside the application, as a hand-built
-file would risk being corrupt or simply refusing to open.
+`College_Management_System.pkt` in this repository's root is a real,
+already-built Packet Tracer file — every device in the table below is
+placed and cabled, every router/switch has its full config applied via
+CLI, DHCP/DNS/HTTP/wireless are configured, and the network has been
+tested end-to-end in Realtime mode (see the README's **Testing &
+Verification** section for exactly what was checked).
+
+**Two small manual steps are still needed** before the file is 100%
+complete — both are GUI drag-and-drop/paste actions that could not be
+finished reliably through automation:
+
+1. **Step 2b** — insert the WPC300N wireless module into `LAPTOP-WIFI1`
+   and `LAPTOP-WIFI2` (currently placed on the canvas but offline — no
+   module, no cable). ~30 seconds each.
+2. **Step 4 (SRV-COLLEGE)** — paste [`web/index.html`](web/index.html)
+   into the server's HTTP file editor to replace Packet Tracer's default
+   page. The server's HTTP/DNS service is already on and already serving
+   pages (DNS resolves, HTTP loads) — this step only swaps the page
+   content.
+
+The rest of this guide is kept in full below so you can verify any part
+of the build, re-derive it from scratch if needed, or use it as a
+reference while doing the two steps above.
+
+## Why this guide exists (original rationale)
+
+This repository was originally built in an automated environment that
+could write files (configs, documentation, HTML) but could not drive the
+Cisco Packet Tracer GUI directly. That constraint was later lifted for
+this project (see **Current status** above) and the `.pkt` was built and
+tested for real. Packet Tracer's `.pkt` format is a proprietary, versioned
+binary — never hand-authored outside the application, which is why this
+guide always worked by driving the real app rather than fabricating the
+file.
 
 Rather than fake a `.pkt` file or fabricate screenshots of a topology that
 was never actually built and tested, every piece of **real, verifiable**
-work is included instead: the full IP/VLAN design, every router and
-switch CLI configuration (copy-paste ready), the DNS/HTTP server
-settings, the AP settings, and this exact build sequence. Following the
-steps below in Packet Tracer 9.0 (already confirmed installed) produces
-the finished, working `.pkt` file in well under an hour, after which you
-can save it into this repository as `College_Management_System.pkt` and
-take real screenshots for the `screenshots/` folder.
+work is included: the full IP/VLAN design, every router and switch CLI
+configuration (copy-paste ready), the DNS/HTTP server settings, the AP
+settings, and this exact build sequence — all of which the committed
+`.pkt` was actually built from.
 
 ## Step 1 — Place the devices
 
@@ -68,13 +92,20 @@ list and every config file pastes in with zero editing.
 
 **Core-to-access trunks**
 
+> Correction verified directly against Packet Tracer: the 3560-24PS model
+> only exposes 2 Gigabit ports (Gi0/1, Gi0/2) plus 24 FastEthernet ports —
+> not 6 Gigabit ports as an earlier draft of `SW-CORE.txt` assumed. Fixed
+> in both the config and this table: Gi0/2 keeps the SW-ADMIN trunk, the
+> other four trunks move to FastEthernet0/1–0/4 (100 Mbps trunk links —
+> fully valid for 802.1Q trunking in Packet Tracer).
+
 | Device A  | Port A | Device B     | Port B |
 |------------|--------|---------------|--------|
 | SW-CORE    | Gi0/2  | SW-ADMIN      | Gi0/1  |
-| SW-CORE    | Gi0/3  | SW-ACCOUNTS   | Gi0/1  |
-| SW-CORE    | Gi0/4  | SW-ACADEMIC   | Gi0/1  |
-| SW-CORE    | Gi0/5  | SW-STUDENT    | Gi0/1  |
-| SW-CORE    | Gi0/6  | SW-SERVER     | Gi0/1  |
+| SW-CORE    | Fa0/1  | SW-ACCOUNTS   | Gi0/1  |
+| SW-CORE    | Fa0/2  | SW-ACADEMIC   | Gi0/1  |
+| SW-CORE    | Fa0/3  | SW-STUDENT    | Gi0/1  |
+| SW-CORE    | Fa0/4  | SW-SERVER     | Gi0/1  |
 
 **Access ports — end devices**
 

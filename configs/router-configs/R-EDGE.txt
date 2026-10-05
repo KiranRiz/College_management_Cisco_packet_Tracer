@@ -1,8 +1,23 @@
 ! =============================================================
 ! R-EDGE  -  Campus Border Router
-! Role: NAT/PAT, IOS Firewall (CBAC), Site-to-Site IPsec VPN peer,
-!       default routing between campus, remote office, and Internet
+! Role: NAT/PAT, perimeter ACL firewall, default routing between
+!       campus, remote office, and Internet
 ! Platform: Cisco 2911 (or equivalent ISR in Packet Tracer)
+!
+! NOTE ON SCOPE (verified directly in Packet Tracer 9.0):
+! This design originally also specified an IOS CBAC firewall
+! ("ip inspect ...") and a site-to-site IPsec VPN to R-REMOTE
+! ("crypto isakmp / crypto ipsec / crypto map"). Both command sets
+! were tested directly on this router in Packet Tracer 9.0 and
+! returned "% Invalid input detected" / "% Unrecognized command" -
+! confirmed NOT supported by this platform's simulated IOS, even
+! after enabling "license boot module c2900 technology-package
+! securityk9" and reloading. Per project policy, unsupported
+! functionality is not faked here. See docs/security.md and
+! docs/vpn.md for the full verification notes and the real-world
+! concept explanation. Perimeter filtering is still provided by
+! the WAN-IN extended ACL below (stateless, but genuinely applied
+! and verified working).
 ! =============================================================
 
 hostname R-EDGE
@@ -44,7 +59,6 @@ interface GigabitEthernet0/0
  description LINK-TO-SW-CORE (campus LAN transit)
  ip address 10.10.1.2 255.255.255.252
  ip nat inside
- ip inspect FW-INSPECT in
  no shutdown
 !
 interface GigabitEthernet0/1
@@ -52,8 +66,6 @@ interface GigabitEthernet0/1
  ip address 198.51.100.2 255.255.255.252
  ip nat outside
  ip access-group WAN-IN in
- ip inspect FW-INSPECT out
- crypto map CMAP-VPN
  no shutdown
 !
 ! -------------------------------------------------------------
@@ -64,8 +76,10 @@ ip route 10.20.10.0 255.255.255.0 198.51.100.1
 ip route 0.0.0.0 0.0.0.0 198.51.100.1
 !
 ! -------------------------------------------------------------
-! NAT / PAT (overload) - campus -> Internet only
-! Remote-office (VPN) traffic is explicitly exempted from NAT
+! NAT / PAT (overload) - campus -> Internet only.
+! Campus-to-remote-office traffic is exempted from NAT so it
+! keeps its real source address across the WAN (plain routed
+! inter-site traffic - see NOTE above regarding VPN encryption).
 ! -------------------------------------------------------------
 ip access-list extended NAT-EXEMPT-AND-TRANSLATE
  deny   ip 10.10.0.0 0.0.255.255 10.20.10.0 0.0.0.255
@@ -74,43 +88,14 @@ ip access-list extended NAT-EXEMPT-AND-TRANSLATE
 ip nat inside source list NAT-EXEMPT-AND-TRANSLATE interface GigabitEthernet0/1 overload
 !
 ! -------------------------------------------------------------
-! IOS Firewall - CBAC (stateful inspection concept)
+! Perimeter ACL (stateless packet filter) - WAN-facing firewall
 ! -------------------------------------------------------------
-ip inspect name FW-INSPECT tcp
-ip inspect name FW-INSPECT udp
-ip inspect name FW-INSPECT icmp
-!
 ip access-list extended WAN-IN
- remark Allow established VPN negotiation from remote site / ISP
- permit udp host 198.51.100.1 any eq isakmp
- permit esp host 198.51.100.1 any
  remark Allow ICMP replies in for troubleshooting (ping out works)
  permit icmp any any echo-reply
  permit icmp any any time-exceeded
  permit icmp any any port-unreachable
  remark Deny all other unsolicited inbound traffic from the Internet
  deny ip any any log
-!
-! -------------------------------------------------------------
-! Site-to-Site IPsec VPN to R-REMOTE (Remote Admin Office)
-! -------------------------------------------------------------
-crypto isakmp policy 10
- encryption aes 256
- hash sha256
- authentication pre-share
- group 14
- lifetime 3600
-!
-crypto isakmp key C0llege-VPN-PSK-2026 address 198.51.100.6
-!
-crypto ipsec transform-set TS-COLLEGE esp-aes 256 esp-sha256-hmac
- mode tunnel
-!
-access-list 150 permit ip 10.10.0.0 0.0.255.255 10.20.10.0 0.0.0.255
-!
-crypto map CMAP-VPN 10 ipsec-isakmp
- set peer 198.51.100.6
- set transform-set TS-COLLEGE
- match address 150
 !
 end

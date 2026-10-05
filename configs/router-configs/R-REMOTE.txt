@@ -1,8 +1,18 @@
 ! =============================================================
 ! R-REMOTE  -  Remote Admin Office Branch Router
-! Role: Default gateway for the remote site, IPsec VPN peer back
-!       to the main campus (R-EDGE)
+! Role: Default gateway for the remote site, routed back to the
+!       main campus over the WAN (see NOTE below on VPN scope)
 ! Platform: Cisco 2901 (or equivalent ISR in Packet Tracer)
+!
+! NOTE ON SCOPE: a site-to-site IPsec VPN to R-EDGE was designed
+! and tested here but Packet Tracer 9.0's simulated IOS rejects
+! all "crypto isakmp / crypto ipsec / crypto map" commands as
+! unrecognized on this platform (verified directly, including
+! after enabling the securityk9 license and reloading). Per
+! project policy, this is not faked - the remote site is reached
+! by plain static routing instead, and VPN is documented as a
+! concept in docs/vpn.md. See docs/security.md for the full
+! verification notes.
 ! =============================================================
 
 hostname R-REMOTE
@@ -39,7 +49,6 @@ logging buffered 16384 informational
 interface GigabitEthernet0/0
  description WAN-LINK-TO-ISP-RTR
  ip address 198.51.100.6 255.255.255.252
- crypto map CMAP-VPN
  no shutdown
 !
 interface GigabitEthernet0/1
@@ -61,27 +70,5 @@ ip dhcp pool REMOTE-OFFICE-POOL
  default-router 10.20.10.1
  dns-server 10.10.80.10
  domain-name college.local
-!
-! -------------------------------------------------------------
-! Site-to-Site IPsec VPN back to R-EDGE (main campus)
-! -------------------------------------------------------------
-crypto isakmp policy 10
- encryption aes 256
- hash sha256
- authentication pre-share
- group 14
- lifetime 3600
-!
-crypto isakmp key C0llege-VPN-PSK-2026 address 198.51.100.2
-!
-crypto ipsec transform-set TS-COLLEGE esp-aes 256 esp-sha256-hmac
- mode tunnel
-!
-access-list 150 permit ip 10.20.10.0 0.0.0.255 10.10.0.0 0.0.255.255
-!
-crypto map CMAP-VPN 10 ipsec-isakmp
- set peer 198.51.100.2
- set transform-set TS-COLLEGE
- match address 150
 !
 end
